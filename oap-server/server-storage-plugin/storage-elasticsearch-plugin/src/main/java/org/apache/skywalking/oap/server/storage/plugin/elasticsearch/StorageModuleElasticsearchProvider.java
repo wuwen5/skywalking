@@ -170,7 +170,8 @@ public class StorageModuleElasticsearchProvider extends ModuleProvider {
             new BatchProcessEsDAO(elasticSearchClient, config.getBulkActions(),  config
                 .getFlushInterval(), config.getConcurrentRequests())
         );
-        this.registerServiceImplementation(StorageDAO.class, new StorageEsDAO(elasticSearchClient));
+        this.registerServiceImplementation(StorageDAO.class, new StorageEsDAO(elasticSearchClient,
+                config.isSupportLogRecordContentUseJsonStorage()));
         this.registerServiceImplementation(
             IHistoryDeleteDAO.class, new HistoryDeleteEsDAO(elasticSearchClient));
         this.registerServiceImplementation(
@@ -186,7 +187,8 @@ public class StorageModuleElasticsearchProvider extends ModuleProvider {
         this.registerServiceImplementation(IAggregationQueryDAO.class, new AggregationQueryEsDAO(elasticSearchClient));
         this.registerServiceImplementation(IAlarmQueryDAO.class, new AlarmQueryEsDAO(elasticSearchClient));
         this.registerServiceImplementation(ITopNRecordsQueryDAO.class, new TopNRecordsQueryEsDAO(elasticSearchClient));
-        this.registerServiceImplementation(ILogQueryDAO.class, new LogQueryEsDAO(elasticSearchClient));
+        this.registerServiceImplementation(ILogQueryDAO.class, new LogQueryEsDAO(elasticSearchClient,
+                config.isSupportLogRecordContentUseJsonStorage()));
         this.registerServiceImplementation(
             IProfileTaskQueryDAO.class, new ProfileTaskQueryEsDAO(elasticSearchClient, config
                 .getProfileTaskQueryMaxSize()));

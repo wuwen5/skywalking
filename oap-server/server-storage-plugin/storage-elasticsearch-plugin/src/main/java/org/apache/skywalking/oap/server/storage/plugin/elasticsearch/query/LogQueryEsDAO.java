@@ -20,6 +20,9 @@ package org.apache.skywalking.oap.server.storage.plugin.elasticsearch.query;
 
 import java.io.IOException;
 import java.util.List;
+
+import com.google.gson.Gson;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.skywalking.oap.server.core.analysis.manual.log.AbstractLogRecord;
 import org.apache.skywalking.oap.server.core.analysis.manual.log.LogRecord;
 import org.apache.skywalking.oap.server.core.analysis.manual.searchtag.Tag;
@@ -47,9 +50,18 @@ import org.elasticsearch.search.sort.SortOrder;
 import static java.util.Objects.nonNull;
 import static org.apache.skywalking.apm.util.StringUtil.isNotEmpty;
 
+@Slf4j
 public class LogQueryEsDAO extends EsDAO implements ILogQueryDAO {
+
+    private final boolean supportLogRecordContentUseJsonStorage;
+
     public LogQueryEsDAO(ElasticSearchClient client) {
+        this(client, false);
+    }
+
+    public LogQueryEsDAO(ElasticSearchClient client, boolean supportLogRecordContentUseJsonStorage) {
         super(client);
+        this.supportLogRecordContentUseJsonStorage = supportLogRecordContentUseJsonStorage;
     }
 
     @Override
@@ -112,25 +124,28 @@ public class LogQueryEsDAO extends EsDAO implements ILogQueryDAO {
 
         if (CollectionUtils.isNotEmpty(keywordsOfContent)) {
             keywordsOfContent.forEach(
-                content ->
-                    mustQueryList.add(
-                        QueryBuilders.matchPhraseQuery(
-                            MatchCNameBuilder.INSTANCE.build(AbstractLogRecord.CONTENT),
-                            content
-                        )
-                    )
-            );
+                    content ->
+                            mustQueryList.add(QueryBuilders.boolQuery()
+                                    .should(QueryBuilders.matchPhraseQuery(
+                                            MatchCNameBuilder.INSTANCE.build(AbstractLogRecord.CONTENT),
+                                            content
+                                    ))
+                                    .should(QueryBuilders.queryStringQuery(AbstractLogRecord.CONTENT + "_json." + content))
+                            ));
         }
 
         if (CollectionUtils.isNotEmpty(excludingKeywordsOfContent)) {
             excludingKeywordsOfContent.forEach(
-                content ->
-                    boolQueryBuilder.mustNot(
-                        QueryBuilders.matchPhraseQuery(
-                            MatchCNameBuilder.INSTANCE.build(AbstractLogRecord.CONTENT),
-                            content
-                        )
-                    )
+                    content ->
+                            boolQueryBuilder.mustNot(
+                                    QueryBuilders.boolQuery()
+                                            .should(QueryBuilders.matchPhraseQuery(
+                                                    MatchCNameBuilder.INSTANCE.build(AbstractLogRecord.CONTENT),
+                                                    content
+                                            ))
+                                            .should(QueryBuilders.queryStringQuery(AbstractLogRecord.CONTENT + "_json." + content))
+
+                            )
             );
         }
 
@@ -138,30 +153,44 @@ public class LogQueryEsDAO extends EsDAO implements ILogQueryDAO {
         sourceBuilder.size(limit);
         sourceBuilder.from(from);
 
+        log.debug("sourceBuilder:{}", sourceBuilder);
+
         SearchResponse response = getClient()
-            .search(IndexController.LogicIndicesRegister.getPhysicalTableName(LogRecord.INDEX_NAME), sourceBuilder);
+                .search(IndexController.LogicIndicesRegister.getPhysicalTableName(LogRecord.INDEX_NAME), sourceBuilder);
 
         Logs logs = new Logs();
-        logs.setTotal((int) response.getHits().totalHits);
+        logs.setTotal(getTotalHis(response));
 
         for (SearchHit searchHit : response.getHits().getHits()) {
             Log log = new Log();
             log.setServiceId((String) searchHit.getSourceAsMap().get(AbstractLogRecord.SERVICE_ID));
             log.setServiceInstanceId((String) searchHit.getSourceAsMap()
-                                                       .get(AbstractLogRecord.SERVICE_INSTANCE_ID));
+                    .get(AbstractLogRecord.SERVICE_INSTANCE_ID));
             log.setEndpointId((String) searchHit.getSourceAsMap().get(AbstractLogRecord.ENDPOINT_ID));
             log.setEndpointName((String) searchHit.getSourceAsMap().get(AbstractLogRecord.ENDPOINT_NAME));
             log.setTraceId((String) searchHit.getSourceAsMap().get(AbstractLogRecord.TRACE_ID));
             log.setTimestamp(((Number) searchHit.getSourceAsMap().get(AbstractLogRecord.TIMESTAMP)).longValue());
             log.setContentType(ContentType.instanceOf(
-                ((Number) searchHit.getSourceAsMap().get(AbstractLogRecord.CONTENT_TYPE)).intValue()));
+                    ((Number) searchHit.getSourceAsMap().get(AbstractLogRecord.CONTENT_TYPE)).intValue()));
             log.setContent((String) searchHit.getSourceAsMap().get(AbstractLogRecord.CONTENT));
             String dataBinaryBase64 = (String) searchHit.getSourceAsMap().get(AbstractLogRecord.TAGS_RAW_DATA);
+
+            if (supportLogRecordContentUseJsonStorage && log.getContentType() == ContentType.JSON) {
+                Object jsonObj = searchHit.getSourceAsMap().get(AbstractLogRecord.CONTENT + "_json");
+                if (jsonObj != null) {
+                    log.setContent(new Gson().toJson(jsonObj));
+                }
+            }
+
             if (!Strings.isNullOrEmpty(dataBinaryBase64)) {
                 parserDataBinary(dataBinaryBase64, log.getTags());
             }
             logs.getLogs().add(log);
         }
         return logs;
+    }
+
+    protected int getTotalHis(SearchResponse response) {
+        return (int) response.getHits().totalHits;
     }
 }

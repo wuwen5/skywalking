@@ -89,4 +89,10 @@ public class StorageModuleElasticsearchConfig extends ModuleConfig {
      */
     private String oapLogAnalyzer = "{\"analyzer\":{\"oap_log_analyzer\":{\"type\":\"standard\"}}}";
     private String advanced;
+
+    /**
+     * The content field of the LogRecord storage using JSON Map, when the content_type is json
+     * @since 8.7.0
+     * */
+    private boolean supportLogRecordContentUseJsonStorage;
 }

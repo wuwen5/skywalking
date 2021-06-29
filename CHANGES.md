@@ -48,6 +48,7 @@ Release Notes.
 * Performance: trim useless metadata fields in Envoy ALS metadata to improve performance.
 * Fix: slowDBAccessThreshold dynamic config error when not configured.
 * Performance: cache regex pattern and result, optimize string concatenation in Envy ALS analyzer.
+* storage elasticsearch supports json content
 
 #### UI
 * Fix the date component for log conditions.

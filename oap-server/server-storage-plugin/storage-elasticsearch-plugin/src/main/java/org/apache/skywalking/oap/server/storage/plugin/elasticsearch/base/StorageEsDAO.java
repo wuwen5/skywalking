@@ -18,8 +18,10 @@
 
 package org.apache.skywalking.oap.server.storage.plugin.elasticsearch.base;
 
+import org.apache.skywalking.oap.server.core.UnexpectedException;
 import org.apache.skywalking.oap.server.core.analysis.config.NoneStream;
 import org.apache.skywalking.oap.server.core.analysis.management.ManagementData;
+import org.apache.skywalking.oap.server.core.analysis.manual.log.LogRecord;
 import org.apache.skywalking.oap.server.core.analysis.metrics.Metrics;
 import org.apache.skywalking.oap.server.core.analysis.record.Record;
 import org.apache.skywalking.oap.server.core.storage.IManagementDAO;
@@ -31,10 +33,19 @@ import org.apache.skywalking.oap.server.core.storage.StorageHashMapBuilder;
 import org.apache.skywalking.oap.server.core.storage.type.StorageBuilder;
 import org.apache.skywalking.oap.server.library.client.elasticsearch.ElasticSearchClient;
 
+import java.util.Map;
+
 public class StorageEsDAO extends EsDAO implements StorageDAO {
 
+    private final boolean supportLogRecordContentUseJsonStorage;
+
     public StorageEsDAO(ElasticSearchClient client) {
+        this(client, false);
+    }
+
+    public StorageEsDAO(ElasticSearchClient client, boolean supportLogRecordContentUseJsonStorage) {
         super(client);
+        this.supportLogRecordContentUseJsonStorage = supportLogRecordContentUseJsonStorage;
     }
 
     @Override
@@ -44,7 +55,8 @@ public class StorageEsDAO extends EsDAO implements StorageDAO {
 
     @Override
     public IRecordDAO newRecordDao(StorageBuilder storageBuilder) {
-        return new RecordEsDAO(getClient(), (StorageHashMapBuilder<Record>) storageBuilder);
+        return new RecordEsDAO(getClient(), storageBuilder((StorageHashMapBuilder<Record>) storageBuilder,
+                supportLogRecordContentUseJsonStorage));
     }
 
     @Override
@@ -55,5 +67,21 @@ public class StorageEsDAO extends EsDAO implements StorageDAO {
     @Override
     public IManagementDAO newManagementDao(StorageBuilder storageBuilder) {
         return new ManagementEsDAO(getClient(), (StorageHashMapBuilder<ManagementData>) storageBuilder);
+    }
+
+    protected StorageHashMapBuilder<Record> storageBuilder(StorageHashMapBuilder<Record> storageBuilder,
+                                                                boolean supportLogRecordContentUseJson) {
+        try {
+            if (supportLogRecordContentUseJson &&
+                    LogRecord.class.equals(
+                            storageBuilder.getClass().getMethod("storage2Entity", Map.class).getReturnType())) {
+
+                return StorageHashMapBuilder.class.cast(new ESLogRecordBuilder());
+            } else {
+                return storageBuilder;
+            }
+        } catch (NoSuchMethodException e) {
+            throw new UnexpectedException("Can't find the storage2Entity method.");
+        }
     }
 }

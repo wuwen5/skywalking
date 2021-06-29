@@ -28,12 +28,8 @@ import org.elasticsearch.action.bulk.BulkProcessor;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.update.UpdateRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class BatchProcessEsDAO extends EsDAO implements IBatchDAO {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(BatchProcessEsDAO.class);
 
     private BulkProcessor bulkProcessor;
     private final int bulkActions;
